@@ -13,29 +13,48 @@ export default function HomeScreen() {
   const { user } = useUser();
   const router = useRouter();
 
-  const [featured, setFeatures] = React.useState<Property[]>([]);
+  const [featured, setFeatured] = React.useState<Property[]>([]);
   const [recommended, setRecommended] = React.useState<Property[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
   const fetchProperties = async () => {
     setLoading(true);
-    
-  const { data: featuredData } = await supabase
-    .from("properties")
-    .select("*")
-    .eq("is_featured", true)
-    .order("created_at", { ascending: false });
+    setError(null);
 
-  const { data: recommendedData } = await supabase
-    .from("properties")
-    .select("*")
-    .eq("is_featured", false)
-    .order("created_at", { ascending: false }); 
+    try {
+      const { data: featuredData, error: featuredError } = await supabase
+        .from("properties")
+        .select("*")
+        .eq("is_featured", true)
+        .order("created_at", { ascending: false });
 
-  setFeatures(featuredData ?? []);
-  setRecommended(recommendedData ?? []);
-  setLoading(false);
-  }
+      if (featuredError) {
+        console.error("Error fetching featured properties:", featuredError);
+        setError("Failed to load featured properties");
+      } else {
+        setFeatured(featuredData ?? []);
+      }
+
+      const { data: recommendedData, error: recommendedError } = await supabase
+        .from("properties")
+        .select("*")
+        .eq("is_featured", false)
+        .order("created_at", { ascending: false });
+
+      if (recommendedError) {
+        console.error("Error fetching recommended properties:", recommendedError);
+        setError("Failed to load recommended properties");
+      } else {
+        setRecommended(recommendedData ?? []);
+      }
+    } catch (fetchError) {
+      console.error("Unexpected error fetching properties:", fetchError);
+      setError("Failed to load properties");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -94,6 +113,12 @@ export default function HomeScreen() {
               </TouchableOpacity>
 
             </TouchableOpacity>
+
+            {error ? (
+              <View className="mx-5 mb-5 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                <Text className="text-sm font-medium text-red-600">{error}</Text>
+              </View>
+            ) : null}
 
             {/* featured Properties Section */}
             <View className="mb-6">
