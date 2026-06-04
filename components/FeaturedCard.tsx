@@ -23,11 +23,12 @@ export default function FeaturedCard({ property }: { property: Property }) {
        onPress={()=>router.push(`/(root)/property/${property.id}`)}
     >
         <Image 
-          source = {
+          source = {{
+            uri:
             property.images.length > 0
-             ? { uri: property.images[0] }
+             ?  property.images[0] 
              : require("@/assets/images/rentmitra.png")
-          }
+          }}
           className="w-full h-44 rounded-xl"
           resizeMode="cover"
         />

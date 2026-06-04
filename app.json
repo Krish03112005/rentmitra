@@ -28,6 +28,12 @@
     "plugins": [
       "expo-router",
       [
+        "expo-location",
+        {
+           "locationWhenInUsePermission": "Allow Livora to access your location to tag your property coordinates."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/rentmitra.png",
@@ -46,3 +52,10 @@
     }
   }
 }
+
+
+
+
+
+
+
