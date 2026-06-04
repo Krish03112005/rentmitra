@@ -1,102 +1,184 @@
-import { View, Text, ScrollView, FlatList, TouchableOpacity, Image, Dimensions, NativeSyntheticEvent, NativeScrollEvent, Linking, Alert } from 'react-native'
-import React, { useEffect, useState } from 'react'
-import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useAuth } from '@clerk/expo';
-import { useUserStore } from '@/store/userStore';
-import { Property } from '@/types';
-import { useSupabase } from '@/hooks/useSupabase';
-import { supabase } from '@/lib/supabase';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useSavedProperty } from '@/hooks/useSavedProperty';
-import { formatPrice } from '@/lib/utils';
-import { WebView } from 'react-native-webview';
-import ImageViewing from 'react-native-image-viewing'
+import ImageViewer from "@/components/ImageViewer";
+import { useSignedPropertyImages } from "@/hooks/usePropertyImages";
+import { useSavedProperty } from "@/hooks/useSavedProperty";
+import { useSupabase } from "@/hooks/useSupabase";
+import { supabase as publicSupabase } from "@/lib/supabase";
+import { formatPrice } from "@/lib/utils";
+import { Property } from "@/types";
+import { useAuth } from "@clerk/expo";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Linking,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { WebView } from "react-native-webview";
 
-const {width} = Dimensions.get("window")
+const { width } = Dimensions.get("window");
+const fallbackImage = require("@/assets/images/livora.png");
+const EMPTY_IMAGES: string[] = [];
 
-const ADMIN_PHONE = '+91 8369925249'; //Replace with your phone number
+const normalizeWhatsappNumber = (value?: string | null) =>
+  value?.replace(/\D/g, "") ?? "";
 
 export default function PropertyDetail() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { userId } = useAuth();
+  const router = useRouter();
 
-    const { id } = useLocalSearchParams<{id: string}>();
-    const { userId } = useAuth();
-    const router = useRouter();
-    const isAdmin = useUserStore((state) => state.isAdmin);
+  const [property, setProperty] = useState<Property | null>(null);
+  const [propertyError, setPropertyError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
 
-    const [property, setProperty] = useState<Property | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [activeIndex, setActiveIndex] = useState(0);
-    const [expanded, setExpanded] = useState(false);
-    const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const authSupabase = useSupabase();
 
-    const authSupabase = useSupabase();
+  const { isSaved, saveLoading, toggleSave } = useSavedProperty(id ?? "");
+  const signedImages = useSignedPropertyImages(property?.images ?? EMPTY_IMAGES);
 
-    const { isSaved, saveLoading, toggleSave } = useSavedProperty(id ?? "");
+  const fetchProperty = useCallback(async () => {
+    setLoading(true);
+    setPropertyError(null);
 
-    const fetchProperty = async () => {
-    const { data } = await supabase
+    const { data, error } = await publicSupabase
       .from("properties")
       .select("*")
       .eq("id", id)
       .single();
 
-    setProperty(data);
+    if (error) {
+      setPropertyError(error.message || "Unable to load property.");
+      setProperty(null);
+    } else {
+      setProperty(data);
+    }
+
     setLoading(false);
+  }, [id]);
+
+  useEffect(() => {
+    fetchProperty();
+  }, [fetchProperty]);
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / width);
+    setActiveIndex(index);
   };
 
-    useEffect(() => {
-      fetchProperty();
-    }, [id]);
+  const handleContact = () => {
+    const phone = normalizeWhatsappNumber(property?.contact_whatsapp);
 
-    const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const index = Math.round(e.nativeEvent.contentOffset.x / width);
-      setActiveIndex(index);
-    };
+    if (!phone) {
+      Alert.alert(
+        "Contact unavailable",
+        "The property creator has not added a WhatsApp number yet.",
+      );
+      return;
+    }
 
-    const handleContact = () => {
-        const message = `Hi! I'm Intrested in the property: ${property?.title}`;
+    const message = `Hi! I'm interested in the property: ${property?.title}`;
 
-        const url = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(
-            message,
-        )}`;
-        Linking.openURL(url);
-    };
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    Linking.openURL(url);
+  };
 
-    const handleMarkSold = () => {
-        Alert.alert("Mark as Sold", "Are you sure?", [
-            { text: "Cancel", style: "cancel"},
-            {
-              text: "Mark Sold",
-              onPress: async () => {
-              await authSupabase
-                .from("properties")
-                .update({ is_sold: true })
-                .eq("id", id);
-                setProperty((prev) => (prev ? { ...prev, is_sold: true } : prev));
-              },
-            },
-        ]);
-    };
+  const updateOwnedProperty = async (updates: Partial<Property>) => {
+    return authSupabase
+      .from("properties")
+      .update(updates)
+      .eq("id", id)
+      .eq("owner_clerk_id", userId)
+      .select("*")
+      .maybeSingle();
+  };
 
-    const handleDelete = () => {
-        Alert.alert("Delete Property", "Are you sure?", [
-        { text: "Cancel", style: "cancel" },
-        {
-            text: "Delete",
-            style: "destructive",
-            onPress: async () => {
-            await authSupabase.from("properties").delete().eq("id", id);
-            router.replace("/(root)/(tabs)");
-            },
+  const deleteOwnedProperty = async () => {
+    return authSupabase
+      .from("properties")
+      .delete()
+      .eq("id", id)
+      .eq("owner_clerk_id", userId)
+      .select("*")
+      .maybeSingle();
+  };
+
+  const handleMarkSold = () => {
+    Alert.alert("Mark as Sold", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Mark Sold",
+        onPress: async () => {
+          const { data, error } = await updateOwnedProperty({ is_sold: true });
+
+          if (error || !data) {
+            Alert.alert(
+              "Error",
+              "Only the property creator can mark it as sold.",
+            );
+            return;
+          }
+
+          setProperty(data as Property);
         },
-        ]);
-    };
+      },
+    ]);
+  };
 
-    if (!property) {
+  const handleDelete = () => {
+    Alert.alert("Delete Property", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          const { data, error } = await deleteOwnedProperty();
+
+          if (error || !data) {
+            Alert.alert("Error", "Only the property creator can delete it.");
+            return;
+          }
+
+          router.replace("/(root)/(tabs)");
+        },
+      },
+    ]);
+  };
+
+  if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
-        <Text className="text-gray-500">Property not found</Text>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text className="text-gray-500 mt-3">Loading property...</Text>
+      </View>
+    );
+  }
+
+  if (!property) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white px-4">
+        <Text className="text-gray-500 mb-4">
+          {propertyError ?? "Property not found."}
+        </Text>
+        <TouchableOpacity
+          onPress={fetchProperty}
+          className="rounded-full bg-blue-600 px-5 py-3"
+        >
+          <Text className="text-white font-medium text-center">Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -108,45 +190,54 @@ export default function PropertyDetail() {
   }&layer=mapnik&marker=${property.latitude}%2C${property.longitude}`;
 
   const isLongDesc = (property.description?.length ?? 0) > 150;
-  const displayDesc = 
+  const displayDesc =
     expanded || !isLongDesc
-    ? property.description
-    : property.description?.slice(0, 150) + "...";
+      ? property.description
+      : property.description?.slice(0, 150) + "...";
+
+  const isOwner = !!userId && property.owner_clerk_id === userId;
+  const carouselImages =
+    signedImages.length > 0
+      ? signedImages
+      : property.images.map(() => null);
 
   return (
-    <View className='flex-1 bg-white'>
+    <View className="flex-1 bg-white">
       <ScrollView showsVerticalScrollIndicator={false}>
         <View>
-            <View style={{opacity: property.is_sold ? 0.5 : 1}}>
-                <FlatList
-                  data={property.images}
-                  keyExtractor={(_,i) => i.toString()}
-                  renderItem={({item})=>(
-                    <TouchableOpacity onPress={() => setImageViewerVisible(true)}>
-                        <Image
-                          source={{ uri: item }}
-                          style={{width, height:300}}
-                         />
-                    </TouchableOpacity>
-                  )}
-                  horizontal
-                  pagingEnabled
-                  onScroll={onScroll}
-                  showsHorizontalScrollIndicator={false}
-                  scrollEventThrottle={16}
-                />
-            </View>
+          <View style={{ opacity: property.is_sold ? 0.5 : 1 }}>
+            <FlatList
+              data={carouselImages}
+              keyExtractor={(_, i) => i.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  disabled={!item}
+                  onPress={() => setImageViewerVisible(true)}
+                >
+                  <Image
+                    source={item ? { uri: item } : fallbackImage}
+                    style={{ width, height: 300 }}
+                  />
+                </TouchableOpacity>
+              )}
+              horizontal
+              pagingEnabled
+              onScroll={onScroll}
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+            />
+          </View>
 
-            {/* Image count badge */}
-            <View className="absolute bottom-3 right-4 bg-black/50 px-3 py-1 rounded-full">
-              <Text className="text-white text-xs font-medium">
+          {/* Image count badge */}
+          <View className="absolute bottom-3 right-4 bg-black/50 px-3 py-1 rounded-full">
+            <Text className="text-white text-xs font-medium">
               {activeIndex + 1}/{property.images.length}
-              </Text>
-            </View>
+            </Text>
+          </View>
 
-                   <SafeAreaView className='absolute top-0 left-0 right-0'>
-           <View className='flex-row items-center justify-between px-4 pt-2'>
-                  <TouchableOpacity
+          <SafeAreaView className="absolute top-0 left-0 right-0">
+            <View className="flex-row items-center justify-between px-4 pt-2">
+              <TouchableOpacity
                 onPress={() => router.back()}
                 className="w-10 h-10 bg-white rounded-full items-center justify-center"
                 style={{ elevation: 3 }}
@@ -165,19 +256,19 @@ export default function PropertyDetail() {
                   color={isSaved ? "#EF4444" : "#111827"}
                 />
               </TouchableOpacity>
-           </View>
-        </SafeAreaView>
+            </View>
+          </SafeAreaView>
         </View>
 
         <View
-         className='px-5 pt-5 pb-8'
-         style={{opacity: property.is_sold ? 0.6 : 1}}
+          className="px-5 pt-5 pb-8"
+          style={{ opacity: property.is_sold ? 0.6 : 1 }}
         >
-          <View className='flex-row gap-2 mb-3 flex-wrap'>
-            <View className='bg-blue-50 px-3 py-1 rounded-full'>
-            <Text className='text-blue-500 text-xs font-semibold capitalize'>
-                  {property.type}
-            </Text>
+          <View className="flex-row gap-2 mb-3 flex-wrap">
+            <View className="bg-blue-50 px-3 py-1 rounded-full">
+              <Text className="text-blue-500 text-xs font-semibold capitalize">
+                {property.type}
+              </Text>
             </View>
             {property.is_featured && (
               <View className="bg-amber-50 px-3 py-1 rounded-full">
@@ -202,162 +293,174 @@ export default function PropertyDetail() {
             {formatPrice(property.price)}
           </Text>
 
-          <View className='flex-row justify-between bg-gray-50 rounded-2xl p-4 mb-5'>
-            <SpecItem 
-              icon='bed-outline'
+          <View className="flex-row justify-between bg-gray-50 rounded-2xl p-4 mb-5">
+            <SpecItem
+              icon="bed-outline"
               label="Beds"
               value={`${property.bedrooms}`}
             />
-            <SpecItem 
-              icon='water-outline'
+            <SpecItem
+              icon="water-outline"
               label="Bathroom"
-              value={`${property.bedrooms}`}
+              value={`${property.bathrooms}`}
             />
-            <SpecItem 
-              icon='expand-outline'
+            <SpecItem
+              icon="expand-outline"
               label="Area"
               value={`${property.area_sqft} ft²`}
             />
-            <SpecItem 
-              icon='home-outline'
+            <SpecItem
+              icon="home-outline"
               label="Type"
               value={`${property.type}`}
             />
           </View>
 
-            <Text className='text-base font-bold text-gray-900 mb-2'>
-                Description
+          <Text className="text-base font-bold text-gray-900 mb-2">
+            Description
+          </Text>
+          <Text className="text-gray-500 text-sm leading-6 mb-1">
+            {displayDesc}
+          </Text>
+
+          {isLongDesc && (
+            <TouchableOpacity onPress={() => setExpanded(!expanded)}>
+              <Text className="text-blue-600 text-sm font-medium mb-5">
+                {expanded ? "Show less" : "Read more"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <Text className="text-base font-bold text-gray-900 mb-2 mt-5">
+            Location
+          </Text>
+
+          <View className="flex-row items-center gap-2 mb-4">
+            <Ionicons name="location-outline" size={16} color="#6B7280" />
+            <Text className="text-gray-500 text-sm flex-1">
+              {property.address}, {property.city}
             </Text>
-            <Text className='text-gray-500 text-sm leading-6 mb-1'>
-                {displayDesc}
-            </Text>
+          </View>
 
-            {isLongDesc && (
-              <TouchableOpacity onPress={() => setExpanded(!expanded)}>
-               <Text className="text-blue-600 text-sm font-medium mb-5">
-                 {expanded ? "Show less" : "Read more"}
-               </Text>
-              </TouchableOpacity>
-            )}
-
-            <Text className='text-base font-bold text-gray-900 mb-2 mt-5'>
-                Location
-            </Text>
-
-            <View className='flex-row items-center gap-2 mb-4'>
-                <Ionicons name='location-outline' size={16} color="#6B7280"/>
-                <Text className='text-gray-500 text-sm flex-1'>
-                    {property.address}, {property.city}
-                </Text>
-            </View>
-
-            <TouchableOpacity 
-            onPress={() => 
-                router.push({
-                    pathname: "/(root)/property/map",
-                    params: {
-                        latitude: property.latitude,
-                        longitude: property.longitude,
-                        title: property.title,
-                        address: `${property.address}, ${property.city}`
-                    },
-                })
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: "/(root)/property/map",
+                params: {
+                  latitude: property.latitude,
+                  longitude: property.longitude,
+                  title: property.title,
+                  address: `${property.address}, ${property.city}`,
+                },
+              })
             }
-               activeOpacity={0.9} 
-               className='rounded-xl overflow-hidden mb-6'
-               style={{ height: 200 }}
-            >
-                <WebView 
-                  source={{ uri: mapUrl }}
-                  style={{ flex: 1 }}
-                  scrollEnabled={false}
-                  pointerEvents="none"
-                />
+            activeOpacity={0.9}
+            className="rounded-xl overflow-hidden mb-6"
+            style={{ height: 200 }}
+          >
+            <WebView
+              source={{ uri: mapUrl }}
+              style={{ flex: 1 }}
+              scrollEnabled={false}
+              pointerEvents="none"
+            />
 
-                <View className="absolute bottom-3 right-3 bg-white/90 px-3 py-1 rounded-full flex-row items-center gap-1">
-                <Ionicons name="expand-outline" size={12} color="#374151" />
-                <Text className="text-gray-600 text-xs font-medium">
-                    Tap to expand
+            <View className="absolute bottom-3 right-3 bg-white/90 px-3 py-1 rounded-full flex-row items-center gap-1">
+              <Ionicons name="expand-outline" size={12} color="#374151" />
+              <Text className="text-gray-600 text-xs font-medium">
+                Tap to expand
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Contact Button */}
+          <TouchableOpacity
+            onPress={handleContact}
+            className="flex-row items-center justify-center gap-2 bg-green-600 py-4 rounded-2xl mb-4"
+          >
+            <Ionicons name="logo-whatsapp" size={20} color="white" />
+            <Text className="text-white font-bold text-base">
+              Contact Owner
+            </Text>
+          </TouchableOpacity>
+
+          {isOwner && (
+            <View className="gap-3">
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: "/(root)/(tabs)/create",
+                    params: { id: property.id },
+                  })
+                }
+                className="flex-row items-center justify-center
+                      gap-2 bg-blue-50 py-4 rounded-2xl border border-blue-200
+                    "
+              >
+                <Ionicons name="create-outline" size={18} color="#2563EB" />
+                <Text className="text-blue-600 font-semibold">
+                  Edit Property
                 </Text>
-                </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
 
-            {/* Contact Button */}
-            <TouchableOpacity
-                onPress={handleContact}
-                className="flex-row items-center justify-center gap-2 bg-green-600 py-4 rounded-2xl mb-4"
-            >
-                <Ionicons name="logo-whatsapp" size={20} color="white" />
-                <Text className="text-white font-bold text-base">
-                Contact Agent
-                </Text>
-            </TouchableOpacity>
-
-            {isAdmin && (
-                <View className="flex-row gap-3">
-                    {!property.is_sold && (
-                    <TouchableOpacity 
+              <View className="flex-row gap-3">
+                {!property.is_sold && (
+                  <TouchableOpacity
                     onPress={handleMarkSold}
-                    className='flex-1 flex-row items-center justify-center
+                    className="flex-1 flex-row items-center justify-center
                       gap-2 bg-amber-50 py-4 rounded-2xl border border-amber-200
-                    '>
+                    "
+                  >
                     <Ionicons
-                        name="checkmark-circle-outline"
-                        size={18}
-                        color="#D97706"
+                      name="checkmark-circle-outline"
+                      size={18}
+                      color="#D97706"
                     />
                     <Text className="text-amber-600 font-semibold">
-                        Mark Sold
+                      Mark Sold
                     </Text>
-                    </TouchableOpacity>
-                    )}
+                  </TouchableOpacity>
+                )}
 
-                    <TouchableOpacity 
-                    onPress={handleDelete}
-                    className='flex-1 flex-row items-center justify-center
+                <TouchableOpacity
+                  onPress={handleDelete}
+                  className="flex-1 flex-row items-center justify-center
                       gap-2 bg-red-50 py-4 rounded-2xl border border-red-200
-                    '>
-                    <Ionicons
-                        name="trash-outline"
-                        size={18}
-                        color="#EF4444"
-                    />
-                    <Text className="text-red-600 font-semibold">
-                        Delete
-                    </Text>
-                    </TouchableOpacity>
-                </View>
-            )}
+                    "
+                >
+                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                  <Text className="text-red-600 font-semibold">Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
-      </ScrollView>  
+      </ScrollView>
 
-      <ImageViewing 
-        images={property.images.map((uri) => ({ uri }))}
+      <ImageViewer
+        images={signedImages.map((uri) => ({ uri }))}
         imageIndex={activeIndex}
-        visible={imageViewerVisible}
+        visible={imageViewerVisible && signedImages.length > 0}
         onRequestClose={() => setImageViewerVisible(false)}
       />
     </View>
-  )
+  );
 }
 
 function SpecItem({
-    icon, 
-    label, 
-    value
-} : {
-    icon: keyof typeof Ionicons.glyphMap;
-    label: string;
-    value: string;
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
 }) {
-     return (
+  return (
     <View className="items-center gap-1">
       <Ionicons name={icon} size={20} color="#2563EB" />
       <Text className="text-gray-900 font-bold text-sm">{value}</Text>
       <Text className="text-gray-400 text-xs">{label}</Text>
     </View>
-    )
+  );
 }
-
-
-

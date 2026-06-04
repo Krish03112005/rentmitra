@@ -4,10 +4,13 @@ import { Property } from '@/types';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { formatPrice } from '@/lib/utils';
+import { useSignedPropertyImage } from '@/hooks/usePropertyImages';
 
+const fallbackImage = require("@/assets/images/livora.png");
 
 export default function FeaturedCard({ property }: { property: Property }) {
     const router = useRouter();
+    const coverImage = useSignedPropertyImage(property.images?.[0]);
 
   return (
     <TouchableOpacity
@@ -23,12 +26,7 @@ export default function FeaturedCard({ property }: { property: Property }) {
        onPress={()=>router.push(`/(root)/property/${property.id}`)}
     >
         <Image 
-          source = {{
-            uri:
-            property.images.length > 0
-             ?  property.images[0] 
-             : require("@/assets/images/rentmitra.png")
-          }}
+          source={coverImage ? { uri: coverImage } : fallbackImage}
           className="w-full h-44 rounded-xl"
           resizeMode="cover"
         />
@@ -87,7 +85,6 @@ export default function FeaturedCard({ property }: { property: Property }) {
     </TouchableOpacity>
   )
 }
-
 
 
 

@@ -1,26 +1,39 @@
-import { View, Text, TouchableOpacity, Image } from 'react-native'
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  GestureResponderEvent,
+} from 'react-native'
 import React from 'react'
 import { Property } from '@/types'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons';
 import { formatPrice } from '@/lib/utils';
-import { useSavedProperty } from '@/hooks/useSavedProperty';
+import { useSignedPropertyImage } from '@/hooks/usePropertyImages';
 
-export default function PropertyCard({ property, onUnsave,
-    showSave = false,
-} : { 
-    property: Property;
-    onUnsave?: () => void;
-    showSave?: boolean;
-})
- {
-  
+const fallbackImage = require("@/assets/images/livora.png");
+
+interface PropertyCardProps {
+  property: Property;
+  isSaved?: boolean;
+  saveLoading?: boolean;
+  onToggleSave?: () => void | Promise<unknown>;
+}
+
+export default function PropertyCard({
+  property,
+  isSaved = false,
+  saveLoading = false,
+  onToggleSave,
+}: PropertyCardProps) {
   const router = useRouter();
+  const coverImage = useSignedPropertyImage(property.images?.[0]);
 
-  const { isSaved, saveLoading, toggleSave } = useSavedProperty (
-    property.id, 
-    onUnsave
-  )
+  const handleToggleSave = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    void onToggleSave?.();
+  };
 
   return (
      <TouchableOpacity
@@ -36,12 +49,7 @@ export default function PropertyCard({ property, onUnsave,
        onPress={()=>router.push(`/(root)/property/${property.id}`)}
     >
         <Image 
-           source = {{
-            uri:
-             property.images.length > 0
-             ? property.images[0] 
-             : require("@/assets/images/rentmitra.png")
-          }}
+           source={coverImage ? { uri: coverImage } : fallbackImage}
           className="w-28 h-28 rounded-xl"
           resizeMode="cover"
         />
@@ -94,8 +102,8 @@ export default function PropertyCard({ property, onUnsave,
         </View>
         
         <TouchableOpacity
-          onPress={toggleSave}
-          disabled={saveLoading}
+          onPress={handleToggleSave}
+          disabled={saveLoading || !onToggleSave}
           
           className='w-10 items-center pt-3'>
             <Ionicons
@@ -107,9 +115,6 @@ export default function PropertyCard({ property, onUnsave,
     </TouchableOpacity>
   );
 }
-
-
-
 
 
 

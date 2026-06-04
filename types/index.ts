@@ -14,5 +14,7 @@ export interface Property {
   images: [string, ...string[]];
   is_featured: boolean;
   is_sold: boolean;
+  owner_clerk_id?: string | null;
+  contact_whatsapp?: string | null;
   created_at: string;
 }

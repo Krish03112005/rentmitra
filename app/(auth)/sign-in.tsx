@@ -1,5 +1,6 @@
 import { useSignIn } from "@clerk/expo";
-import { Link, useRouter } from "expo-router";
+import GoogleAuthButton from "@/components/GoogleAuthButton";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -96,7 +97,7 @@ export default function SignInScreen() {
         >
           <View className="w-full">
             <Image
-              source={require("../../assets/images/rentmitra.png")}
+              source={require("../../assets/images/livora.png")}
               className="w-32 h-16 mb-8 self-center"
              resizeMode="contain"
             />
@@ -165,7 +166,7 @@ export default function SignInScreen() {
       >
       <View className="w-full">
         <Image
-          source={require("../../assets/images/rentmitra.png")}
+          source={require("../../assets/images/livora.png")}
           className="w-36 h-16 mb-6 self-center"
           resizeMode="contain"
         />
@@ -173,6 +174,16 @@ export default function SignInScreen() {
           Welcome back
         </Text>
         <Text className="text-gray-500 mb-7 self-center">Sign in to your account</Text>
+
+        <GoogleAuthButton label="Sign in with Google" />
+
+        <View className="flex-row items-center mb-5">
+          <View className="h-px flex-1 bg-gray-200" />
+          <Text className="mx-3 text-xs font-semibold uppercase text-gray-400">
+            or
+          </Text>
+          <View className="h-px flex-1 bg-gray-200" />
+        </View>
 
         <TextInput
           className="w-full border border-gray-300 rounded-xl px-4 py-3 mb-4"
@@ -215,11 +226,11 @@ export default function SignInScreen() {
           )}
         </TouchableOpacity>
 
-        <View className="flex-row justify-center">
+        <View className="flex-row justify-center items-center">
           <Text className="text-gray-500">Don&apos;t have an account? </Text>
-          <Link href="/sign-up">
+          <TouchableOpacity onPress={() => router.push("/sign-up")}>
             <Text className="text-blue-600 font-semibold">Sign Up</Text>
-          </Link>
+          </TouchableOpacity>
         </View>
       </View>
       </ScrollView>

@@ -1,4 +1,4 @@
-import { View, Text, Modal, Touchable, TouchableOpacity, ScrollView, TextInput } from 'react-native'
+import { View, Text, Modal, TouchableOpacity, ScrollView, TextInput } from 'react-native'
 import React, { useState } from 'react'
 import { PropertyType, useFilterStore } from '@/store/filterStore';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,7 +47,6 @@ export default function FilterModal({
         bedrooms,
         minPrice,
         maxPrice,
-        setSearch,
         setType,
         setBedrooms,
         setMinPrice,

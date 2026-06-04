@@ -4,9 +4,14 @@
     "slug": "React-Native",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/rentmitra.png",
+    "icon": "./assets/images/livora-icon.png",
     "scheme": "reactnative",
     "userInterfaceStyle": "automatic",
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#FFFFFF",
+      "translucent": false
+    },
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
@@ -36,7 +41,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/rentmitra.png",
+          "image": "./assets/images/livora.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -52,8 +57,6 @@
     }
   }
 }
-
-
 
 
 

@@ -1,12 +1,13 @@
 import { View, Text, ScrollView, Image, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native'
 import React, { useState } from 'react'
-import { Link, Redirect, useRouter } from "expo-router"
+import { Redirect, useRouter } from "expo-router"
 import { useAuth, useSignUp } from '@clerk/expo';
+import GoogleAuthButton from '@/components/GoogleAuthButton';
 
 export default function SignUp() {
 
     const { signUp, errors, fetchStatus } = useSignUp();
-    const { isSignedIn } = useAuth();
+    const { isLoaded, isSignedIn } = useAuth();
 
     const router = useRouter();
 
@@ -18,8 +19,14 @@ export default function SignUp() {
 
     const isLoading = fetchStatus === 'fetching';
 
-    if (signUp.status === 'complete' || isSignedIn) {
-        return <Redirect href="/" />;
+    if (!isLoaded) return null;
+
+    if (isSignedIn) {
+        return <Redirect href="/(root)/(tabs)" />;
+    }
+
+    if (signUp.status === 'complete') {
+        return <Redirect href="/(root)/(tabs)" />;
     }
 
     const onSignUpPress = async () => {
@@ -76,7 +83,7 @@ export default function SignUp() {
         >
     <View className='w-full'>
          <Image 
-            source={require('../../assets/images/rentmitra.png')}
+            source={require('../../assets/images/livora.png')}
             className='w-32 h-16 mb-8 self-center'
             resizeMode='contain'
         />
@@ -139,7 +146,7 @@ export default function SignUp() {
         >
             <View className='w-full'>
                 <Image 
-                    source={require('../../assets/images/rentmitra.png')} 
+                    source={require('../../assets/images/livora.png')} 
                     className='w-32 h-16 mb-8 self-center'
                     resizeMode='contain'
                 />
@@ -147,6 +154,17 @@ export default function SignUp() {
                     Create Account
                 </Text>
                 <Text className='text-gray-500 mb-8 self-center'>Find your dream Home today</Text>
+
+                <GoogleAuthButton label="Sign up with Google" />
+
+                <View className="flex-row items-center mb-5">
+                    <View className="h-px flex-1 bg-gray-200" />
+                    <Text className="mx-3 text-xs font-semibold uppercase text-gray-400">
+                        or
+                    </Text>
+                    <View className="h-px flex-1 bg-gray-200" />
+                </View>
+
                 <View className='flex-row gap-3 mb-4'>
                     <TextInput
                         className='flex-1 border border-gray-300 p-4 rounded-xl py-3'
@@ -207,11 +225,11 @@ export default function SignUp() {
                  )}
                 </TouchableOpacity>
 
-                <View className="flex-row justify-center">
+                <View className="flex-row justify-center items-center">
                     <Text className="text-gray-500">Already have an account? </Text>
-                    <Link href="/sign-in">
+                    <TouchableOpacity onPress={() => router.push("/sign-in")}>
                         <Text className="text-blue-600 font-semibold">Sign In</Text>
-                    </Link>
+                    </TouchableOpacity>
                 </View>
 
                 <View nativeID="clerk-captcha" />
