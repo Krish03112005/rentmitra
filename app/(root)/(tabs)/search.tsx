@@ -1,6 +1,7 @@
 import FilterModal from "@/components/FilterModal";
 import PropertyCard from "@/components/PropertyCard";
 import { useSavedProperties } from "@/hooks/useSavedProperties";
+import { PUBLIC_PROPERTY_SELECT } from "@/lib/propertySelect";
 import { supabase } from "@/lib/supabase";
 import { formatPrice } from "@/lib/utils";
 import { useFilterStore } from "@/store/filterStore";
@@ -104,7 +105,9 @@ export default function Search() {
       const { from, to } = getPageRange(nextPage, SEARCH_PAGE_SIZE);
       const normalizedSearch = normalizeSearchTerm(debouncedSearch);
 
-      let query = supabase.from("properties").select("*");
+      let query = supabase
+        .from("public_properties")
+        .select(PUBLIC_PROPERTY_SELECT);
 
       if (normalizedSearch) {
         query = query.or(
@@ -142,7 +145,7 @@ export default function Search() {
         setError("Failed to load search results");
         if (reset) setResults([]);
       } else {
-        const nextResults = data ?? [];
+        const nextResults = (data as unknown as Property[] | null) ?? [];
         setResults((prev) =>
           reset ? nextResults : [...prev, ...nextResults],
         );

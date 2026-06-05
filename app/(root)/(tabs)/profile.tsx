@@ -121,6 +121,11 @@ export default function Profile() {
             onPress={() => router.push("/(root)/(tabs)/saved")}
           />
           <MenuItem
+            icon="business-outline"
+            label="My Listings"
+            onPress={() => router.push("/(root)/my-listings")}
+          />
+          <MenuItem
             icon="notifications-outline"
             label="Notifications"
             onPress={() =>

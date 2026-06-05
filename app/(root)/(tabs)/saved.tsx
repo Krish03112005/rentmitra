@@ -1,6 +1,7 @@
 import PropertyCard from "@/components/PropertyCard";
 import { useSavedProperties } from "@/hooks/useSavedProperties";
 import { useSupabase } from "@/hooks/useSupabase";
+import { PUBLIC_PROPERTY_SELECT } from "@/lib/propertySelect";
 import { Property } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
@@ -12,7 +13,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 interface SavedProperty {
   id: string;
   property_id: string;
-  properties: Property;
+  property: Property;
+}
+
+interface SavedPropertyRow {
+  id: string;
+  property_id: string;
 }
 
 export default function Saved() {
@@ -41,9 +47,9 @@ export default function Saved() {
     setLoading(true);
     setError(null);
 
-    const { data, error: fetchError } = await authSupabase
+    const { data: savedRows, error: fetchError } = await authSupabase
       .from("saved_properties")
-      .select("id, property_id, properties(*)")
+      .select("id, property_id")
       .eq("user_clerk_id", userId)
       .order("id", { ascending: false });
 
@@ -52,7 +58,46 @@ export default function Saved() {
       setError("Failed to load saved properties.");
       setSaved([]);
     } else {
-      setSaved((data as unknown as SavedProperty[]) ?? []);
+      const rows = (savedRows as SavedPropertyRow[] | null) ?? [];
+      const propertyIds = rows.map((item) => item.property_id);
+
+      if (propertyIds.length === 0) {
+        setSaved([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: properties, error: propertiesError } = await authSupabase
+        .from("public_properties")
+        .select(PUBLIC_PROPERTY_SELECT)
+        .in("id", propertyIds);
+
+      if (propertiesError) {
+        console.error("Failed to fetch saved property details:", propertiesError);
+        setError("Failed to load saved properties.");
+        setSaved([]);
+      } else {
+        const propertyById = new Map(
+          ((properties as unknown as Property[] | null) ?? []).map(
+            (property) => [property.id, property],
+          ),
+        );
+
+        setSaved(
+          rows
+            .map((row) => {
+              const property = propertyById.get(row.property_id);
+
+              return property
+                ? {
+                    ...row,
+                    property,
+                  }
+                : null;
+            })
+            .filter((item): item is SavedProperty => !!item),
+        );
+      }
     }
 
     setLoading(false);
@@ -88,7 +133,7 @@ export default function Saved() {
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
             <PropertyCard
-              property={item.properties}
+              property={item.property}
               isSaved
               saveLoading={savedProperties.isPending(item.property_id)}
               onToggleSave={() =>

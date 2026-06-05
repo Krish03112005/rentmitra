@@ -2,6 +2,7 @@ import ImageViewer from "@/components/ImageViewer";
 import { useSignedPropertyImages } from "@/hooks/usePropertyImages";
 import { useSavedProperty } from "@/hooks/useSavedProperty";
 import { useSupabase } from "@/hooks/useSupabase";
+import { PUBLIC_PROPERTY_SELECT } from "@/lib/propertySelect";
 import { supabase as publicSupabase } from "@/lib/supabase";
 import { formatPrice } from "@/lib/utils";
 import { Property } from "@/types";
@@ -33,6 +34,17 @@ const EMPTY_IMAGES: string[] = [];
 const normalizeWhatsappNumber = (value?: string | null) =>
   value?.replace(/\D/g, "") ?? "";
 
+const isValidCoordinate = (
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+) =>
+  typeof latitude === "number" &&
+  typeof longitude === "number" &&
+  Number.isFinite(latitude) &&
+  Number.isFinite(longitude) &&
+  Math.abs(latitude) <= 90 &&
+  Math.abs(longitude) <= 180;
+
 export default function PropertyDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
@@ -44,6 +56,7 @@ export default function PropertyDetail() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [contactLoading, setContactLoading] = useState(false);
 
   const authSupabase = useSupabase();
 
@@ -55,8 +68,8 @@ export default function PropertyDetail() {
     setPropertyError(null);
 
     const { data, error } = await publicSupabase
-      .from("properties")
-      .select("*")
+      .from("public_properties")
+      .select(PUBLIC_PROPERTY_SELECT)
       .eq("id", id)
       .single();
 
@@ -64,11 +77,29 @@ export default function PropertyDetail() {
       setPropertyError(error.message || "Unable to load property.");
       setProperty(null);
     } else {
-      setProperty(data);
+      let nextProperty = data as unknown as Property;
+
+      if (userId) {
+        const { data: ownedProperty, error: ownedPropertyError } =
+          await authSupabase
+            .from("properties")
+            .select("*")
+            .eq("id", id)
+            .eq("owner_clerk_id", userId)
+            .maybeSingle();
+
+        if (ownedPropertyError) {
+          console.error("Failed to fetch owned property details:", ownedPropertyError);
+        } else if (ownedProperty) {
+          nextProperty = ownedProperty as Property;
+        }
+      }
+
+      setProperty(nextProperty);
     }
 
     setLoading(false);
-  }, [id]);
+  }, [authSupabase, id, userId]);
 
   useEffect(() => {
     fetchProperty();
@@ -79,15 +110,41 @@ export default function PropertyDetail() {
     setActiveIndex(index);
   };
 
-  const handleContact = () => {
-    const phone = normalizeWhatsappNumber(property?.contact_whatsapp);
+  const handleContact = async () => {
+    if (contactLoading) return;
+
+    let phone = normalizeWhatsappNumber(property?.contact_whatsapp);
 
     if (!phone) {
-      Alert.alert(
-        "Contact unavailable",
-        "The property creator has not added a WhatsApp number yet.",
+      if (!userId) {
+        Alert.alert(
+          "Sign in required",
+          "Please sign in before contacting the property owner.",
+        );
+        return;
+      }
+
+      setContactLoading(true);
+
+      const { data, error } = await authSupabase.rpc(
+        "get_property_contact_whatsapp",
+        {
+          target_property_id: id,
+        },
       );
-      return;
+
+      setContactLoading(false);
+
+      if (error || !data) {
+        console.error("Failed to fetch property contact:", error);
+        Alert.alert(
+          "Contact unavailable",
+          "The property creator has not added a WhatsApp number yet.",
+        );
+        return;
+      }
+
+      phone = normalizeWhatsappNumber(data as string);
     }
 
     const message = `Hi! I'm interested in the property: ${property?.title}`;
@@ -183,11 +240,17 @@ export default function PropertyDetail() {
     );
   }
 
-  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${
-    property.longitude - 0.003
-  }%2C${property.latitude - 0.003}%2C${property.longitude + 0.003}%2C${
-    property.latitude + 0.003
-  }&layer=mapnik&marker=${property.latitude}%2C${property.longitude}`;
+  const hasMapCoordinates = isValidCoordinate(
+    property.latitude,
+    property.longitude,
+  );
+  const mapUrl = hasMapCoordinates
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${
+        property.longitude - 0.003
+      }%2C${property.latitude - 0.003}%2C${property.longitude + 0.003}%2C${
+        property.latitude + 0.003
+      }&layer=mapnik&marker=${property.latitude}%2C${property.longitude}`
+    : null;
 
   const isLongDesc = (property.description?.length ?? 0) > 150;
   const displayDesc =
@@ -342,45 +405,59 @@ export default function PropertyDetail() {
             </Text>
           </View>
 
-          <TouchableOpacity
-            onPress={() =>
-              router.push({
-                pathname: "/(root)/property/map",
-                params: {
-                  latitude: property.latitude,
-                  longitude: property.longitude,
-                  title: property.title,
-                  address: `${property.address}, ${property.city}`,
-                },
-              })
-            }
-            activeOpacity={0.9}
-            className="rounded-xl overflow-hidden mb-6"
-            style={{ height: 200 }}
-          >
-            <WebView
-              source={{ uri: mapUrl }}
-              style={{ flex: 1 }}
-              scrollEnabled={false}
-              pointerEvents="none"
-            />
+          {mapUrl ? (
+            <TouchableOpacity
+              onPress={() =>
+                router.push({
+                  pathname: "/(root)/property/map",
+                  params: {
+                    latitude: String(property.latitude),
+                    longitude: String(property.longitude),
+                    title: property.title,
+                    address: `${property.address}, ${property.city}`,
+                  },
+                })
+              }
+              activeOpacity={0.9}
+              className="rounded-xl overflow-hidden mb-6"
+              style={{ height: 200 }}
+            >
+              <WebView
+                source={{ uri: mapUrl }}
+                style={{ flex: 1 }}
+                scrollEnabled={false}
+                pointerEvents="none"
+              />
 
-            <View className="absolute bottom-3 right-3 bg-white/90 px-3 py-1 rounded-full flex-row items-center gap-1">
-              <Ionicons name="expand-outline" size={12} color="#374151" />
-              <Text className="text-gray-600 text-xs font-medium">
-                Tap to expand
+              <View className="absolute bottom-3 right-3 bg-white/90 px-3 py-1 rounded-full flex-row items-center gap-1">
+                <Ionicons name="expand-outline" size={12} color="#374151" />
+                <Text className="text-gray-600 text-xs font-medium">
+                  Tap to expand
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <View className="mb-6 h-36 items-center justify-center rounded-xl bg-gray-50">
+              <Ionicons name="map-outline" size={24} color="#9CA3AF" />
+              <Text className="mt-2 text-sm font-medium text-gray-500">
+                Map location unavailable
               </Text>
             </View>
-          </TouchableOpacity>
+          )}
 
           {/* Contact Button */}
           <TouchableOpacity
             onPress={handleContact}
+            disabled={contactLoading}
             className="flex-row items-center justify-center gap-2 bg-green-600 py-4 rounded-2xl mb-4"
           >
-            <Ionicons name="logo-whatsapp" size={20} color="white" />
+            {contactLoading ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Ionicons name="logo-whatsapp" size={20} color="white" />
+            )}
             <Text className="text-white font-bold text-base">
-              Contact Owner
+              {contactLoading ? "Opening Contact..." : "Contact Owner"}
             </Text>
           </TouchableOpacity>
 

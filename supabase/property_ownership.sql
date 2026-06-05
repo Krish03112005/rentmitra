@@ -46,6 +46,80 @@ begin
   end if;
 end $$;
 
+-- User profile access. The mobile app may sync a user's own profile fields,
+-- but privileged flags such as is_admin must remain server-owned.
+alter table public.users
+  add column if not exists is_admin boolean;
+
+update public.users
+set is_admin = false
+where is_admin is null;
+
+alter table public.users
+  alter column is_admin set default false;
+
+alter table public.users
+  alter column is_admin set not null;
+
+alter table public.users enable row level security;
+
+revoke all on table public.users from anon, authenticated;
+grant select (clerk_id, email, first_name, last_name, avatar_url, is_admin)
+  on table public.users to authenticated;
+grant insert (clerk_id, email, first_name, last_name, avatar_url)
+  on table public.users to authenticated;
+grant update (email, first_name, last_name, avatar_url)
+  on table public.users to authenticated;
+
+do $$
+declare
+  existing_policy record;
+begin
+  for existing_policy in
+    select policyname
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'users'
+  loop
+    execute format(
+      'drop policy if exists %I on public.users',
+      existing_policy.policyname
+    );
+  end loop;
+end $$;
+
+create policy "Users can view their own profile"
+  on public.users
+  for select
+  to authenticated
+  using (
+    (auth.jwt() ->> 'sub') is not null
+    and (auth.jwt() ->> 'sub') = clerk_id
+  );
+
+create policy "Users can create their own profile"
+  on public.users
+  for insert
+  to authenticated
+  with check (
+    (auth.jwt() ->> 'sub') is not null
+    and (auth.jwt() ->> 'sub') = clerk_id
+    and is_admin = false
+  );
+
+create policy "Users can update their own profile"
+  on public.users
+  for update
+  to authenticated
+  using (
+    (auth.jwt() ->> 'sub') is not null
+    and (auth.jwt() ->> 'sub') = clerk_id
+  )
+  with check (
+    (auth.jwt() ->> 'sub') is not null
+    and (auth.jwt() ->> 'sub') = clerk_id
+  );
+
 delete from public.saved_properties saved
 using public.saved_properties duplicate
 where saved.user_clerk_id = duplicate.user_clerk_id
@@ -78,13 +152,104 @@ create index if not exists saved_properties_property_id_idx
 --     contact_whatsapp = '<whatsapp-number-with-country-code>'
 -- where id = '<property-id>';
 
+update public.properties
+set is_featured = false
+where is_featured is null;
+
+alter table public.properties
+  alter column is_featured set default false;
+
+alter table public.properties
+  alter column is_featured set not null;
+
+update public.properties
+set is_sold = false
+where is_sold is null;
+
+alter table public.properties
+  alter column is_sold set default false;
+
+alter table public.properties
+  alter column is_sold set not null;
+
+create or replace view public.public_properties
+with (security_barrier = true)
+as
+select
+  id,
+  title,
+  description,
+  price,
+  type,
+  bedrooms,
+  bathrooms,
+  area_sqft,
+  address,
+  city,
+  case
+    when latitude is null then null
+    else round(latitude::numeric, 2)::double precision
+  end as latitude,
+  case
+    when longitude is null then null
+    else round(longitude::numeric, 2)::double precision
+  end as longitude,
+  images,
+  is_featured,
+  is_sold,
+  created_at
+from public.properties;
+
+comment on view public.public_properties is
+  'Public-safe listing projection. Excludes owner ids, contact numbers, and exact coordinates.';
+
 alter table public.properties enable row level security;
 
+revoke all on table public.properties from anon, authenticated;
+revoke all on table public.public_properties from anon, authenticated;
+grant select on table public.public_properties to anon, authenticated;
+grant select on table public.properties to authenticated;
+grant insert (
+  title,
+  description,
+  price,
+  type,
+  bedrooms,
+  bathrooms,
+  area_sqft,
+  address,
+  city,
+  latitude,
+  longitude,
+  images,
+  owner_clerk_id,
+  contact_whatsapp
+) on table public.properties to authenticated;
+grant update (
+  title,
+  description,
+  price,
+  type,
+  bedrooms,
+  bathrooms,
+  area_sqft,
+  address,
+  city,
+  latitude,
+  longitude,
+  images,
+  is_sold,
+  contact_whatsapp
+) on table public.properties to authenticated;
+grant delete on table public.properties to authenticated;
+
 drop policy if exists "Properties are viewable by everyone" on public.properties;
-create policy "Properties are viewable by everyone"
+drop policy if exists "Creators can view their own properties" on public.properties;
+create policy "Creators can view their own properties"
   on public.properties
   for select
-  using (true);
+  to authenticated
+  using ((auth.jwt() ->> 'sub') = owner_clerk_id);
 
 drop policy if exists "Authenticated users can create their own properties" on public.properties;
 create policy "Authenticated users can create their own properties"
@@ -113,6 +278,82 @@ create policy "Creators can delete their own properties"
   using ((auth.jwt() ->> 'sub') = owner_clerk_id);
 
 drop policy if exists "Public clients can delete owned properties" on public.properties;
+
+create or replace function public.set_property_featured(
+  property_id text,
+  featured boolean
+)
+returns public.properties
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_property public.properties;
+begin
+  if not exists (
+    select 1
+    from public.users
+    where clerk_id = (auth.jwt() ->> 'sub')
+      and is_admin = true
+  ) then
+    raise exception 'Only admins can update featured properties'
+      using errcode = '42501';
+  end if;
+
+  update public.properties
+  set is_featured = featured
+  where id::text = property_id
+  returning * into updated_property;
+
+  if updated_property.id is null then
+    raise exception 'Property not found'
+      using errcode = 'P0002';
+  end if;
+
+  return updated_property;
+end;
+$$;
+
+revoke all on function public.set_property_featured(text, boolean)
+  from public, anon, authenticated;
+grant execute on function public.set_property_featured(text, boolean)
+  to authenticated;
+
+create or replace function public.get_property_contact_whatsapp(
+  target_property_id text
+)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  whatsapp_number text;
+begin
+  if (auth.jwt() ->> 'sub') is null then
+    raise exception 'Authentication is required to contact property owners'
+      using errcode = '42501';
+  end if;
+
+  select contact_whatsapp
+  into whatsapp_number
+  from public.properties
+  where id::text = target_property_id;
+
+  if whatsapp_number is null or length(whatsapp_number) = 0 then
+    raise exception 'Property contact is unavailable'
+      using errcode = 'P0002';
+  end if;
+
+  return whatsapp_number;
+end;
+$$;
+
+revoke all on function public.get_property_contact_whatsapp(text)
+  from public, anon, authenticated;
+grant execute on function public.get_property_contact_whatsapp(text)
+  to authenticated;
 
 alter table public.saved_properties enable row level security;
 
@@ -200,8 +441,8 @@ create policy "Listed property images can be signed for reading"
     and (
       exists (
         select 1
-        from public.properties
-        where public.properties.images @> array[storage.objects.name]
+        from public.public_properties
+        where public.public_properties.images @> array[storage.objects.name]
       )
       or (
         (auth.jwt() ->> 'sub') is not null

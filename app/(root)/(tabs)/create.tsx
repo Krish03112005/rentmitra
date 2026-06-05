@@ -25,7 +25,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const TYPES = ["apartment", "house", "villa", "studio"] as const;
+const TYPES = ["apartment", "house", "villa", "studio", "bungalow"] as const;
 type PropertyType = (typeof TYPES)[number];
 
 const MIN_PRICE = 1;
@@ -105,7 +105,6 @@ interface FormState {
   whatsapp: string;
   latitude: string;
   longitude: string;
-  isFeatured: boolean;
   images: string[]; // Supabase storage object paths -> saved to DB
   localImages: string[]; // Device/browser URIs -> shown in preview
 }
@@ -123,7 +122,6 @@ const INITIAL_FORM: FormState = {
   whatsapp: "",
   latitude: "",
   longitude: "",
-  isFeatured: false,
   images: [],
   localImages: [],
 };
@@ -201,7 +199,6 @@ export default function Create() {
         whatsapp: data.contact_whatsapp ?? "",
         latitude: data.latitude ? String(data.latitude) : "",
         longitude: data.longitude ? String(data.longitude) : "",
-        isFeatured: data.is_featured ?? false,
         images,
         localImages: signedImageUrls,
       });
@@ -410,13 +407,11 @@ export default function Create() {
       latitude: form.latitude ? Number(form.latitude) : null,
       longitude: form.longitude ? Number(form.longitude) : null,
       images: uploadedImages,
-      is_featured: form.isFeatured,
     };
 
     const ownedPropertyPayload = {
       ...propertyPayload,
       owner_clerk_id: userId,
-      is_sold: false,
     };
 
     if (isEditing) {
@@ -756,16 +751,6 @@ export default function Create() {
             </View>
           </View>
 
-          {/* Toggles */}
-          <View className="gap-3 mb-5">
-            <Toggle
-              label="Featured Property"
-              description="Show this in the Featured section on home"
-              value={form.isFeatured}
-              onChange={(v) => updateForm({ isFeatured: v })}
-            />
-          </View>
-
           {/* Submit */}
           <TouchableOpacity
             onPress={handleSubmit}
@@ -794,43 +779,6 @@ export default function Create() {
     </SafeAreaView>
   );
 }
-
-const Toggle = ({
-  label,
-  value,
-  onChange,
-  description,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-  description?: string;
-}) => (
-  <TouchableOpacity
-    onPress={() => onChange(!value)}
-    className={`flex-row items-center justify-between p-4 rounded-2xl border ${
-      value ? "bg-blue-50 border-blue-200" : "bg-white border-gray-200"
-    }`}
-  >
-    <View className="flex-1 mr-3">
-      <Text
-        className={`font-semibold ${value ? "text-blue-700" : "text-gray-700"}`}
-      >
-        {label}
-      </Text>
-      {description && (
-        <Text className="text-xs text-gray-400 mt-0.5">{description}</Text>
-      )}
-    </View>
-    <View
-      className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
-        value ? "bg-blue-600 border-blue-600" : "border-gray-300"
-      }`}
-    >
-      {value && <Ionicons name="checkmark" size={14} color="white" />}
-    </View>
-  </TouchableOpacity>
-);
 
 const Counter = ({
   label,

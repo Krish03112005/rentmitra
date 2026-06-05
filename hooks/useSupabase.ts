@@ -1,17 +1,20 @@
-import { useAuth } from "@clerk/expo";
+import { useSession } from "@clerk/expo";
 import { createClerkSupabaseClient } from "../lib/supabase";
 import { useEffect, useMemo, useRef } from "react";
 
 export function useSupabase() {
-    const { getToken } = useAuth();
-    const getTokenRef = useRef(getToken);
+    const { session } = useSession();
+    const sessionRef = useRef(session);
 
     useEffect(() => {
-        getTokenRef.current = getToken;
-    }, [getToken]);
+        sessionRef.current = session;
+    }, [session]);
 
     const client = useMemo(
-        () => createClerkSupabaseClient(() => getTokenRef.current()),
+        () =>
+            createClerkSupabaseClient(async () =>
+                sessionRef.current?.getToken({ skipCache: true }) ?? null,
+            ),
         [],
     );
 

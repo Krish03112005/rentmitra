@@ -41,12 +41,13 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/livora.png",
-          "imageWidth": 200,
+          "image": "./assets/images/livora-splash.png",
+          "imageWidth": 390,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#FFFFFF",
           "dark": {
-            "backgroundColor": "#000000"
+            "image": "./assets/images/livora-splash.png",
+            "backgroundColor": "#FFFFFF"
           }
         }
       ],
@@ -57,7 +58,6 @@
     }
   }
 }
-
 
 
 

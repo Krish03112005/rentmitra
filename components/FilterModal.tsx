@@ -9,6 +9,7 @@ const TYPES: { label: string; value: PropertyType }[] = [
   { label: "House", value: "house" },
   { label: "Villa", value: "villa" },
   { label: "Studio", value: "studio" },
+  { label: "Bungalow", value: "bungalow" },
 ];
 
 const BEDS = [
