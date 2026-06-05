@@ -35,7 +35,7 @@
       [
         "expo-location",
         {
-           "locationWhenInUsePermission": "Allow Livora to access your location to tag your property coordinates."
+          "locationWhenInUsePermission": "Allow Livora to access your location to tag your property coordinates."
         }
       ],
       [
@@ -47,7 +47,7 @@
           "backgroundColor": "#FFFFFF",
           "dark": {
             "image": "./assets/images/livora-splash.png",
-            "backgroundColor": "#FFFFFF"
+            "backgroundColor": "#181818"
           }
         }
       ],
@@ -58,7 +58,3 @@
     }
   }
 }
-
-
-
-
