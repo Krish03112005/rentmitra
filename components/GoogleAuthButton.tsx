@@ -46,7 +46,7 @@ export default function GoogleAuthButton({
       const { createdSessionId, setActive } = await startSSOFlow({
         strategy: "oauth_google",
         redirectUrl: AuthSession.makeRedirectUri({
-          scheme: "reactnative",
+          scheme: "livora",
           path: "sso-callback",
         }),
       });

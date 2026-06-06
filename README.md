@@ -1,50 +1,137 @@
-# Welcome to your Expo app 👋
+# Livora
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Livora is an Expo Router real estate app for listing, searching, saving, and managing properties. It uses Clerk for authentication and Supabase for listing data, saved properties, contact lookup, and property image storage.
 
-## Get started
+## Tech Stack
 
-1. Install dependencies
+- Expo SDK 54
+- React Native 0.81
+- Expo Router
+- Clerk Expo authentication
+- Supabase database and storage
+- NativeWind and Tailwind CSS
 
-   ```bash
-   npm install
-   ```
+## Setup Guide
 
-2. Start the app
+Follow these steps to run the project locally.
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### 1. Clone the Repository
 
 ```bash
-npm run reset-project
+git clone https://github.com/Krish03112005/rentmitra.git
+cd rentmitra
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Install Dependencies
 
-## Learn more
+```bash
+npm install
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+This project uses Expo SDK 54. If you change Expo packages later, prefer:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npx expo install <package-name>
+```
 
-## Join the community
+### 3. Create Environment Variables
 
-Join our community of developers creating universal apps.
+Create a `.env` file in the project root:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+cp .env.example .env
+```
+
+Add your own Clerk and Supabase values:
+
+```env
+EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY =
+EXPO_PUBLIC_SUPABASE_URL =
+EXPO_PUBLIC_SUPABASE_KEY =
+```
+
+Example shape:
+
+```env
+EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_your_supabase_publishable_key
+```
+
+Do not commit `.env`. It is ignored by Git. Keep the repository public only with placeholder values in `.env.example` and this README.
+
+### 4. Configure Clerk
+
+1. Create a Clerk application.
+2. Copy the publishable key into `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`.
+3. Enable Google OAuth if you want the Google sign-in button to work.
+4. Add the Livora deep link scheme in Clerk OAuth redirects:
+
+```text
+livora://sso-callback
+```
+
+### 5. Configure Supabase
+
+1. Create a Supabase project.
+2. Copy the project URL into `EXPO_PUBLIC_SUPABASE_URL`.
+3. Copy the publishable or anon key into `EXPO_PUBLIC_SUPABASE_KEY`.
+4. Configure Clerk as a Supabase third-party auth provider.
+5. Run the SQL in `supabase/property_ownership.sql` from the Supabase SQL Editor.
+6. Confirm the `property-images` storage bucket and policies exist after running the SQL.
+
+### 6. Run the App
+
+```bash
+npx expo start
+```
+
+Then choose one of the Expo launch options:
+
+- Development build
+- Android emulator
+- iOS simulator
+- Expo Go, if every native module you need is supported there
+
+### 7. Run Project Checks
+
+```bash
+npm run lint
+npx tsc --noEmit
+npm run check:supabase
+```
+
+Or run everything together:
+
+```bash
+npm run health
+```
+
+The Supabase check needs network access and valid `.env` values.
+
+## Publishing Safely
+
+Before pushing a public repository, make sure:
+
+- `.env` is not staged.
+- Only `.env.example` contains placeholder values.
+- No service role keys or private Clerk keys are committed.
+- `npm run lint` and `npx tsc --noEmit` pass.
+
+Suggested commit message for README/setup updates:
+
+```text
+docs: add setup guide and environment variables
+```
+
+## Useful Scripts
+
+```bash
+npm run start
+npm run android
+npm run ios
+npm run web
+npm run lint
+npm run check:supabase
+npm run health
+```
